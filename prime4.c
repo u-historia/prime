@@ -5,17 +5,20 @@
 #include <stdatomic.h>
 #include <signal.h>
 
-#define ENDVAL -1LL
+#define ENDVAL -1
 #define NOTHING -42
+
+typedef long long int lli;
+typedef unsigned long long int ulli;
 
 _Atomic int flag = 1;
 int sig = NOTHING;
 
 int FLAG_N = 0;
 int FLAG_O = 0;
-long long int FLAG_S = 100000LL;
-long long int FLAG_B = 0LL;
-long long int FLAG_C = -1LL;
+lli FLAG_S = 100000LL;
+lli FLAG_B = 0LL;
+lli FLAG_C = -1LL;
 
 void signalHandler(int signal){
 	if(signal == SIGINT){
@@ -32,7 +35,7 @@ void signalHandler(int signal){
 		
 }
 
-int calculate(long long int limit, FILE *out){
+int calculate(lli limit, FILE *out){
     if(limit < 2LL)
 		return 1;
 
@@ -41,17 +44,23 @@ int calculate(long long int limit, FILE *out){
     int control;
     double sqr;
     
-	long long int refsize = sqrt(limit);
-	long long int psize = refsize - (refsize % 100000);
+	lli refsize = sqrt(limit);
+
+	lli psize = refsize - (refsize % 100000);
 	psize = psize / 100000;
 	psize++;
 
-	long long int **tmpref = (long long int**)malloc(psize * sizeof(long long int*));
-    long long int *values = (long long int*)malloc(FLAG_S * sizeof(long long int));
+	lli **tmpref = (lli**)malloc(psize * sizeof(lli*));
+    lli *values = (lli*)malloc(FLAG_S * sizeof(lli));
 
 	if(values == NULL || tmpref == NULL){
 		fprintf(stderr, "Bad alloc.\n");
 		fprintf(stderr, "Exitting.\n");
+
+		if(tmpref != NULL)
+			free(tmpref);
+		if(values != NULL)
+			free(values);
 
 		return 2;
 	}
@@ -60,7 +69,7 @@ int calculate(long long int limit, FILE *out){
 		tmpref[i] = NULL;
 	}
 	while(tmpref[0] == NULL){
-		tmpref[0] = (long long int*)malloc(100001 * sizeof(long long int));
+		tmpref[0] = (lli*)malloc(100001 * sizeof(lli));
 	}
 	for(int i = 0; i < 100001; i++){
 		tmpref[0][i] = ENDVAL;
@@ -72,17 +81,16 @@ int calculate(long long int limit, FILE *out){
 
 	usen = 1;
 	int j, w;
-	int k = 0;
-	long long int size = 1LL;
-	for(long long int i = 3LL; i <= refsize; i += 2){
-		if(atomic_load(&flag) == 0){
+	lli k = 0LL;
+	lli size = 1LL;
+	for(lli i = 3LL; i <= refsize; i += 2){
+		if(atomic_load(&flag) == 0)
 			break;
-		}
 
 		if(usen == 100000){
 			k++;
 			while(tmpref[k] == NULL){
-				tmpref[k] = (long long int*)malloc(100001 * sizeof(long long int));
+				tmpref[k] = (lli*)malloc(100001 * sizeof(lli));
 			}
 			for(int f = 0; f < 100001; f++){
 				tmpref[k][f] = ENDVAL;
@@ -96,6 +104,11 @@ int calculate(long long int limit, FILE *out){
 		control = 1;
 		sqr = sqrt(i);
 		while(tmpref[w] != NULL){
+			if(atomic_load(&flag) == 0){
+				control = 0;
+				break;
+			}
+
 			while(tmpref[w][j] <= sqr && tmpref[w][j] != ENDVAL){
 				if(i % tmpref[w][j] == 0LL){
 					control = 0;
@@ -116,13 +129,13 @@ int calculate(long long int limit, FILE *out){
 		
 	}
 
-	long long int *ref = NULL;
+	lli *ref = NULL;
 	while(ref == NULL){
-		ref = (long long int*)malloc((size + 1) * sizeof(long long int));
+		ref = (lli*)malloc((size + 1) * sizeof(lli));
 	}
 	ref[size] = ENDVAL;
-	long long int r = 0LL;
-	for(int i = 0; i <= k; i++){
+	lli r = 0LL;
+	for(lli i = 0; i <= k; i++){
 		j = 0LL;
 		while(tmpref[i][j] != ENDVAL){
 			ref[r] = tmpref[i][j];
@@ -130,23 +143,23 @@ int calculate(long long int limit, FILE *out){
 			r++;
 		}
 	}
-	for(int i = 0; i <= k; i++){
+	for(lli i = 0; i <= k; i++){
 		free(tmpref[i]);
 	}
 	free(tmpref);
 
-	long long int bgn;
+	lli bgn;
 	if(FLAG_B == 0LL){
-		for(long long int i = 0LL; i < size; i++){
+		for(lli i = 0LL; i < size; i++){
 			fprintf(out, "%lld\n", ref[i]);
 		}
 		bgn = refsize;
 	}else if(FLAG_B < refsize && FLAG_B != 0LL){
-		long long int s = 0;
-		while(ref[s] != FLAG_B && ref[s] != ENDVAL){
+		lli s = 0;
+		while(ref[s] < FLAG_B && ref[s] != ENDVAL){
 			s++;
 		}
-		for(long long int i = s; i < size; i++){
+		for(lli i = s; i < size; i++){
 			fprintf(out, "%lld\n", ref[i]);
 		}
 		bgn = ref[size - 1] + 1;
@@ -158,7 +171,7 @@ int calculate(long long int limit, FILE *out){
 		bgn++;
 	}
 	usen = 0;
-    for(long long int i = bgn; i <= limit; i += 2){
+    for(lli i = bgn; i <= limit; i += 2){
     	if(atomic_load(&flag) == 0){
 			break;
 		}
@@ -199,7 +212,7 @@ int calculate(long long int limit, FILE *out){
 
     }
 
-	if(usen != 0){
+	if(usen != 0 && sig != SIGTERM){
 		for(int i = 0; i < usen; i++){
 			fprintf(out, "%lld\n", values[i]);
 		}
@@ -224,17 +237,17 @@ int check(long long int num){
 	int c;
 	int rval = 1;
 
-	long long int j, k, w;
-	long long int sqr;
+	lli j, k, w;
+	lli sqr;
 
 	int usen = 0;
-	long long int refsize = sqrt(num);
+	lli refsize = (lli)sqrt(num);
 	refsize++;
-	long long int psize = refsize - (refsize % 100000);
+	lli psize = refsize - (refsize % 100000);
 	psize = psize / 100000;
 	psize++;
 
-	long long int **ref = (long long int**)malloc(psize * sizeof(long long int*));
+	lli **ref = (lli**)malloc(psize * sizeof(lli*));
 	if(ref == NULL)
 		return -1;
 
@@ -242,16 +255,16 @@ int check(long long int num){
 		ref[i] = NULL;
 	}
 	while(ref[0] == NULL){
-		ref[0] = (long long int*)malloc(100001 * sizeof(long long int));
+		ref[0] = (lli*)malloc(100001 * sizeof(lli));
 	}
 
-	for(long long int i = 0; i < 100001; i++){
+	for(lli i = 0LL; i < 100001; i++){
 		ref[0][i] = ENDVAL;
 	}
 	ref[0][0] = 2LL;
 
 	k = 0LL;
-	for(long long int i = 3; i < refsize; i += 2){
+	for(lli i = 3LL; i < refsize; i += 2){
 		if(atomic_load(&flag) == 0)
 			break;
 
@@ -259,7 +272,7 @@ int check(long long int num){
 		if(usen == 100000){
 			k++;
 			while(ref[k] == NULL){
-				ref[k] = (long long int*)malloc(100001 * sizeof(long long int));
+				ref[k] = (lli*)malloc(100001 * sizeof(lli));
 			}
 			for(int h = 0; h < 100001; h++){
 				ref[k][h] = ENDVAL;
@@ -268,8 +281,12 @@ int check(long long int num){
 		}
 		w = 0LL;
 		c = 1;
-		sqr = sqrt(i);
+		sqr = (lli)sqrt(i);
 		while(ref[w] != NULL){
+			if(atomic_load(&flag) == 0)
+				break;
+
+
 			j = 0LL;
 			while(ref[w][j] != ENDVAL && ref[w][j] <= sqr){
 				if(i % ref[w][j] == 0){
@@ -340,17 +357,15 @@ int main(int argc, char *argv[]){
 				printf("Usage: prime4 [OPTIONS] LIMIT");
 				printf("\n\n");
 
-				printf("-h			Display this help and exit.\n");
-				printf("-v			Display version and exit\n");
-				printf("-n			Do not print progress.\n");
-				printf("-o FILE			Specify output FILE, default: stdout\n");
-				printf("-b BEGIN		Set the BEGIN of program. Default: 0\n");
-				printf("-s SIZE			Indicate the SIZE of used memory block (byte).\n");
-				printf("			Default: %llu bytes.\n", FLAG_S * sizeof(long long int));
-				printf("-i FILE			Add an input FILE which containes prime numbers.\n");
-				printf("			Wrong inputs may cause wrong outputs.\n");
-				printf("-c NUMBER		Check NUMBER if it is prime or not.\n");
-				printf("			Can not be used with any other flag except -i.\n");
+				printf("-h\t\tDisplay this help and exit.\n");
+				printf("-v\t\tDisplay version and exit\n");
+				printf("-n\t\tDo not print progress.\n");
+				printf("-o FILE\t\tSpecify output FILE, default: stdout\n");
+				printf("-b BEGIN\tSet the BEGIN of program. Default: 0\n");
+				printf("-s SIZE\t\tIndicate the SIZE of used memory block (byte).\n");
+				printf("\t\tDefault: %llu bytes.\n",FLAG_S * sizeof(lli));
+				printf("-c NUMBER\tCheck NUMBER if it is prime or not.\n");
+				printf("\t\tCan not be used with any other flag.\n");
 
 				exit(0);
 
@@ -407,7 +422,7 @@ int main(int argc, char *argv[]){
 					exit(1);
 				}
 				if(FLAG_S < sizeof(long long int)){
-					fprintf(stderr, "Size of memory block can not be less than %lu bytes.\n", sizeof(long long int));
+					fprintf(stderr, "Size of memory block can not be less than %lu bytes.\n", sizeof(lli));
 					fprintf(stderr, "Exitting.\n");
 
 					exit(1);
